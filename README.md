@@ -109,3 +109,6 @@ Then open http://localhost:3000/docs for the interactive API.
   and should backfill from `/api/journal`.
 - `LEDGER_DSN` unset means the in-memory store: fast, but everything is lost
   on restart. Don't run money through it.
+- The Postgres store compiles and its SQL was reviewed, but it hasn't run
+  against a live database in this environment. `docker compose up` is the
+  way to exercise it before trusting it.

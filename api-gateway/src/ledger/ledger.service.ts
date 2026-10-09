@@ -11,12 +11,11 @@ export class LedgerService {
   private readonly base = config.ledgerCoreUrl.replace(/\/$/, '');
 
   private async call<T>(path: string, init?: RequestInit): Promise<{ data: T; replayed: boolean }> {
+    const headers = new Headers(init?.headers);
+    headers.set('content-type', 'application/json');
     let res: Response;
     try {
-      res = await fetch(this.base + path, {
-        ...init,
-        headers: { 'content-type': 'application/json', ...(init?.headers ?? {}) },
-      });
+      res = await fetch(this.base + path, { ...init, headers });
     } catch {
       throw new HttpException('ledger core unreachable', 502);
     }
