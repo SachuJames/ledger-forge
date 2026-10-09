@@ -1,0 +1,46 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ledger
+      POSTGRES_PASSWORD: ledger
+      POSTGRES_DB: ledgerforge
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ledger"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  ledger-core:
+    build:
+      context: ..
+      dockerfile: deploy/ledger-core.Dockerfile
+    environment:
+      LEDGER_ADDR: ":8081"
+      LEDGER_DSN: postgres://ledger:ledger@postgres:5432/ledgerforge?sslmode=disable
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api-gateway:
+    build:
+      context: ..
+      dockerfile: deploy/api-gateway.Dockerfile
+    environment:
+      PORT: "3000"
+      LEDGER_CORE_URL: http://ledger-core:8081
+      JWT_SECRET: change-me-in-production
+      LEDGER_ADMIN_USER: admin
+      # bcrypt hash of "changeme"; set LEDGER_ADMIN_PASSWORD_HASH to override
+      LEDGER_ADMIN_PASSWORD_HASH: $$2b$$10$$A2k.HIOCyFbACZA0WQ8P4OUFOdY.0r/Ry5sHWTm98u4O76ZUZ7ylq
+    ports:
+      - "3000:3000"
+    depends_on:
+      - ledger-core
+
+volumes:
+  pgdata:
