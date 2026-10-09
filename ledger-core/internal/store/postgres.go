@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -37,8 +38,16 @@ func (p *Postgres) migrate(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("store: read migration: %w", err)
 	}
-	if _, err := p.pool.Exec(ctx, string(sql)); err != nil {
-		return fmt.Errorf("store: migrate: %w", err)
+	// pgx Exec takes one statement at a time, so split the file. The
+	// migration has no semicolons inside strings or comments.
+	for _, stmt := range strings.Split(string(sql), ";") {
+		stmt = strings.TrimSpace(stmt)
+		if stmt == "" {
+			continue
+		}
+		if _, err := p.pool.Exec(ctx, stmt); err != nil {
+			return fmt.Errorf("store: migrate: %w", err)
+		}
 	}
 	return nil
 }
@@ -89,14 +98,17 @@ func (p *Postgres) InsertEntry(ctx context.Context, e ledger.Entry, deltas map[s
 	defer tx.Rollback(ctx)
 
 	meta, _ := json.Marshal(e.Metadata)
+	if meta == nil {
+		meta = []byte("{}")
+	}
 	var key *string
 	if e.IdempotencyKey != "" {
 		key = &e.IdempotencyKey
 	}
 	if _, err := tx.Exec(ctx,
 		`INSERT INTO entries (id, idempotency_key, narration, metadata, created_at)
-		 VALUES ($1,$2,$3,$4,$5)`,
-		e.ID, key, e.Narration, meta, e.CreatedAt); err != nil {
+		 VALUES ($1,$2,$3,$4::jsonb,$5)`,
+		e.ID, key, e.Narration, string(meta), e.CreatedAt); err != nil {
 		return err
 	}
 	for _, l := range e.Lines {
